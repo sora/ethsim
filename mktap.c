@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
-#include <signal.h>
 #include <time.h>
 
 #include <sys/ioctl.h>
@@ -29,28 +28,6 @@
 #define TAP_MAJOR    10
 #define TAP_MINOR    200
 
-static int caught_signal = 0;
-
-
-/*
- *  sig_handler
- *  @sig:
- */
-void sig_handler(int sig) {
-	if (sig == SIGINT)
-		caught_signal = 1;
-}
-
-/*
- *  set_signal
- *  @sig:
- */
-void set_signal(int sig) {
-	if (signal(sig, sig_handler) == SIG_ERR) {
-		fprintf(stderr, "Cannot set signal\n");
-		exit(1);
-	}
-}
 
 /*
  * tap_init
@@ -78,7 +55,11 @@ int tap_init(char *dev)
 		close(fd);
 		return err;
 	}
-	strcpy(dev, ifr.ifr_name);
+
+	/* enable persistent mode */
+	if (ioctl(fd, TUNSETPERSIST, 1) != 0) {
+		perror("ioctl(TUNSETPERSIST)");
+	}
 
 	return fd;
 }
@@ -162,7 +143,6 @@ void usage(void)
 int main(int argc, char **argv)
 {
 	int i, ndev, ret, fd[MAXNUMDEV];
-	char devpath[IFNAMSIZ + 9];
 	char dev[IFNAMSIZ];
 
 	if (argc != 2) {
@@ -199,25 +179,6 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	set_signal(SIGINT);
-
-	for(;;) {
-		if (caught_signal)
-			break;
-
-		sleep(1);
-	}
-
-	for (i = 0; i < ndev; i++) {
-		sprintf(devpath, "%s/phy%d", TAP_PATH, i);
-		unlink(devpath);
-	}
-
-	/* tap release */
-	for (i = 0; i < ndev; i++) {
-		close(fd[i]);
-	}
-
 	return 0;
 }
 

@@ -2,15 +2,16 @@ DEVNUM = 2
 
 CFLAGS += -Wall -O2
 
-all: run
+all: tap
 
 run: tap
-	./run.sh
+	./run.sh 
 
-tap: tapdev.c
-	gcc $(CFLAGS) -o tapdev  tapdev.c
+tap: mktap.c rmtap.c
+	gcc $(CFLAGS) -o mktap  mktap.c
+	gcc $(CFLAGS) -o rmtap  rmtap.c
 
 .PHONY: clean
 clean:
-	rm -f tapdev
+	rm -f mktap rmtap
 
