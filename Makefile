@@ -1,6 +1,11 @@
+DEVNUM = 2
+
 CFLAGS += -Wall -O2
 
-all: tap
+all: run
+
+run: tap
+	./run.sh
 
 tap: tapdev.c
 	gcc $(CFLAGS) -o tapdev  tapdev.c
