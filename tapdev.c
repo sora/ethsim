@@ -3,6 +3,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
+
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -22,6 +24,29 @@
 #include <time.h>
 
 #define MAXNUMDEV    8
+
+static int caught_signal = 0;
+
+
+/*
+ *  sig_handler
+ *  @sig:
+ */
+void sig_handler(int sig) {
+	if (sig == SIGINT)
+		caught_signal = 1;
+}
+
+/*
+ *  set_signal
+ *  @sig:
+ */
+void set_signal(int sig) {
+	if (signal(sig, sig_handler) == SIG_ERR) {
+		fprintf(stderr, "Cannot set signal\n");
+		exit(1);
+	}
+}
 
 /*
  * tap_init
@@ -144,7 +169,12 @@ int main(int argc, char **argv)
 		}
 	}
 	
+	set_signal(SIGINT);
+
 	for(;;) {
+		if (caught_signal)
+			break;
+
 		sleep(1);
 	}
 
