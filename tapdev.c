@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
+#include <time.h>
 
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -21,9 +22,12 @@
 #include <linux/if_tun.h>
 #include <linux/if_ether.h>
 
-#include <time.h>
 
 #define MAXNUMDEV    8
+
+#define TAP_PATH     "/dev/net"
+#define TAP_MAJOR    10
+#define TAP_MINOR    200
 
 static int caught_signal = 0;
 
@@ -77,6 +81,25 @@ int tap_init(char *dev)
 	strcpy(dev, ifr.ifr_name);
 
 	return fd;
+}
+
+int tap_mkchardev(char *dev)
+{
+	char devpath[IFNAMSIZ + 9];
+	dev_t devnum = 0;
+	int ret;
+
+	sprintf(devpath, "%s/%s", TAP_PATH, dev);
+
+	devnum = makedev(TAP_MAJOR, TAP_MINOR);
+
+	ret = mknod(devpath, S_IFCHR|0666, devnum);
+	if (ret < 0) {
+		perror("mknod");
+		return -1;
+	}
+
+	return 0;
 }
 
 int tap_config(char *dev, int n)
@@ -139,6 +162,7 @@ void usage(void)
 int main(int argc, char **argv)
 {
 	int i, ndev, ret, fd[MAXNUMDEV];
+	char devpath[IFNAMSIZ + 9];
 	char dev[IFNAMSIZ];
 
 	if (argc != 2) {
@@ -162,6 +186,12 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
+		ret = tap_mkchardev(dev);
+		if (ret < 0) {
+			perror("tap_mkchardev");
+			return 1;
+		}
+
 		ret = tap_config(dev, i);
 		if (ret < 0) {
 			perror("tap_config");
@@ -178,6 +208,12 @@ int main(int argc, char **argv)
 		sleep(1);
 	}
 
+	for (i = 0; i < ndev; i++) {
+		sprintf(devpath, "%s/phy%d", TAP_PATH, i);
+		unlink(devpath);
+	}
+
+	/* tap release */
 	for (i = 0; i < ndev; i++) {
 		close(fd[i]);
 	}
