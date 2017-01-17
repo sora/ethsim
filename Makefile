@@ -25,4 +25,5 @@ sim: $(VERILATOR_SRC) $(SIM_SRC) $(RTL_SRC)
 .PHONY: clean
 clean:
 	rm -f mktap rmtap
+	rm -f wave.vcd
 	rm -rf obj_dir

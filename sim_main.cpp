@@ -1,42 +1,75 @@
 #include <verilated.h>
+#include <verilated_vcd_c.h>
 #include "Vtestbench.h"
 
-vluint64_t main_time = 0;
+#define SFP_CLK           (64/2)        // 6.4 ns (156.25 MHz)
 
-double sc_time_stamp () {
-	return main_time;
+#define WAVE_FILE_NAME        "wave.vcd"
+#define SIM_TIME_RESOLUTION   "100 ps"
+
+
+struct sim {
+	vluint64_t main_time;
+
+	Vtestbench *top;
+	
+	VerilatedVcdC *tfp;
+};
+
+static inline void tick(struct sim *s)
+{
+	s->top->eval();
+	s->tfp->dump(s->main_time);
+	++s->main_time;
 }
 
-int main(int argc, char** argv) {
+static inline void clock(struct sim *s)
+{
+	if ((s->main_time % SFP_CLK) == 0)
+		s->top->clk156 = !s->top->clk156;
+}
+
+static inline void cold_reset(struct sim *s)
+{
+	if ((s->main_time % 20) == 0)
+		sim.top->cold_reset = 1;
+}
+
+int main(int argc, char** argv)
+{
+	struct sim sim;
+
 	Verilated::commandArgs(argc, argv);
+	Verilated::traceEverOn(true);
 
-	Vtestbench *top = new Vtestbench;
+	sim.main_time = 0;
+	sim.top = new Vtestbench;
+	sim.tfp = new VerilatedVcdC;
 
-	top->cold_reset = 0;
+	sim.top->trace(sim.tfp, 99);
+	sim.tfp->spTrace()->set_time_resolution(SIM_TIME_RESOLUTION);
+	sim.tfp->open(WAVE_FILE_NAME);
 
-	while (!Verilated::gotFinish()) {
-		if (main_time > 200) {
+
+	// init
+	sim.top->clk156 = 0;
+	sim.top->cold_reset = 0;
+
+	// run
+	for (;;) {
+		if (sim.main_time > 200) {
 			break;
 		}
 
-		if (main_time > 10) {
-			top->cold_reset = 1;
-		}
+		cold_reset(&sim);
 
-		if ((main_time % 10) == 1) {
-			top->clk156 = 1;
-		}
-
-		if ((main_time % 10) == 6) {
-			top->clk156 = 0;
-		}
-
-		top->eval();
-		main_time++;
+		clock(&sim);
+		tick(&sim);
 	}
 
-	top->final();
+	sim.tfp->close();
+	sim.top->final();
 
-	delete top;
+	return 0;
 }
 
