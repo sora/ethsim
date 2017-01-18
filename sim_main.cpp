@@ -7,6 +7,18 @@
 #define WAVE_FILE_NAME        "wave.vcd"
 #define SIM_TIME_RESOLUTION   "100 ps"
 
+struct port {
+	unsigned int pos;
+	unsigned int len;
+	unsigned char buf[2048];
+};
+
+struct phy {
+	char *dev;
+	int fd;
+	struct port tx;
+	struct port rx;
+};
 
 struct sim {
 	vluint64_t main_time;
@@ -14,6 +26,8 @@ struct sim {
 	Vtestbench *top;
 	
 	VerilatedVcdC *tfp;
+
+	struct phy *phy;
 };
 
 static inline void tick(struct sim *s)
@@ -32,12 +46,41 @@ static inline void clock(struct sim *s)
 static inline void cold_reset(struct sim *s)
 {
 	if ((s->main_time % 20) == 0)
-		sim.top->cold_reset = 1;
+		s->top->cold_reset = 1;
 }
 
+static inline int tap_open(struct sim *s)
+{
+	return 0;
+}
+
+static inline int eth_recv(struct sim *s, int n)
+{
+	return 0;
+}
+
+static inline int eth_send(struct sim *s, int n)
+{
+	return 0;
+}
+
+#define N    1
 int main(int argc, char** argv)
 {
 	struct sim sim;
+	int i, ret;
+
+	sim.phy = (struct phy *)malloc(sizeof(struct phy) * N);
+	if (sim.phy == NULL) {
+		perror("malloc");
+		return -1;
+	}
+	
+	ret = tap_open(&sim);
+	if (ret < 0) {
+		perror("tap_open");
+		return -1;
+	}
 
 	Verilated::commandArgs(argc, argv);
 	Verilated::traceEverOn(true);
@@ -57,11 +100,26 @@ int main(int argc, char** argv)
 
 	// run
 	for (;;) {
+		// timeout
 		if (sim.main_time > 200) {
 			break;
 		}
 
 		cold_reset(&sim);
+
+		for (i = 0; i < N; i++) {
+			ret = eth_recv(&sim, i);
+			if (ret < 0) {
+				perror("eth_recv()");
+				break;
+			}
+
+			ret = eth_send(&sim, i);
+			if (ret < 0) {
+				perror("eth_send()");
+				break;
+			}
+		}
 
 		clock(&sim);
 		tick(&sim);
@@ -69,6 +127,8 @@ int main(int argc, char** argv)
 
 	sim.tfp->close();
 	sim.top->final();
+
+	free(sim.phy);
 
 	return 0;
 }
