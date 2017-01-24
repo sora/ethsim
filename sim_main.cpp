@@ -59,10 +59,8 @@ static inline void cold_reset(struct sim *s)
 		s->top->cold_reset = 1;
 }
 
-static inline int tap_open(struct sim *s, int n)
+static inline int tap_open(struct phy *phy)
 {
-	struct phy *phy = &s->phy[n];
-
 	phy->fd = open(phy->dev, O_RDWR);
 	if (phy->fd < 0) {
 		perror("open");
@@ -73,12 +71,12 @@ err:
 	return phy->fd;
 }
 
-static inline int eth_recv(struct sim *s, int n)
+static inline int eth_recv(struct phy *phy)
 {
 	return 0;
 }
 
-static inline int eth_send(struct sim *s, int n)
+static inline int eth_send(struct phy *phy)
 {
 	return 0;
 }
@@ -97,7 +95,7 @@ int main(int argc, char** argv)
 	for (i = 0; i < N; i++) {
 		sprintf(sim.phy[i].dev, "%s/%s%d", TAP_PATH, TAP_NAME, i);
 
-		ret = tap_open(&sim, i);
+		ret = tap_open(&sim.phy[i]);
 		if (ret < 0) {
 			perror("tap_open");
 			return -1;
@@ -130,13 +128,13 @@ int main(int argc, char** argv)
 		cold_reset(&sim);
 
 		for (i = 0; i < N; i++) {
-			ret = eth_recv(&sim, i);
+			ret = eth_recv(&sim.phy[i]);
 			if (ret < 0) {
 				perror("eth_recv()");
 				break;
 			}
 
-			ret = eth_send(&sim, i);
+			ret = eth_send(&sim.phy[i]);
 			if (ret < 0) {
 				perror("eth_send()");
 				break;
