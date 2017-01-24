@@ -16,6 +16,6 @@ echo
 
 # run
 echo "$password" | /usr/bin/sudo -S ./mktap $NDEV
-sleep 3
+sleep 60
 echo "$password" | /usr/bin/sudo -S ./rmtap $NDEV
 

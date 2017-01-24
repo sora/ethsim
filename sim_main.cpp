@@ -2,10 +2,20 @@
 #include <verilated_vcd_c.h>
 #include "Vtestbench.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #define SFP_CLK           (64/2)        // 6.4 ns (156.25 MHz)
 
 #define WAVE_FILE_NAME        "wave.vcd"
 #define SIM_TIME_RESOLUTION   "100 ps"
+
+#define IFNAMSIZ     256
+#define TAP_PATH     "/dev/net"
+#define TAP_NAME     "phy"
+
+#define N    1
 
 struct port {
 	unsigned int pos;
@@ -14,7 +24,7 @@ struct port {
 };
 
 struct phy {
-	char *dev;
+	char dev[IFNAMSIZ];
 	int fd;
 	struct port tx;
 	struct port rx;
@@ -49,9 +59,18 @@ static inline void cold_reset(struct sim *s)
 		s->top->cold_reset = 1;
 }
 
-static inline int tap_open(struct sim *s)
+static inline int tap_open(struct sim *s, int n)
 {
-	return 0;
+	struct phy *phy = &s->phy[n];
+
+	phy->fd = open(phy->dev, O_RDWR);
+	if (phy->fd < 0) {
+		perror("open");
+		goto err;
+	}
+
+err:
+	return phy->fd;
 }
 
 static inline int eth_recv(struct sim *s, int n)
@@ -64,7 +83,6 @@ static inline int eth_send(struct sim *s, int n)
 	return 0;
 }
 
-#define N    1
 int main(int argc, char** argv)
 {
 	struct sim sim;
@@ -75,11 +93,15 @@ int main(int argc, char** argv)
 		perror("malloc");
 		return -1;
 	}
-	
-	ret = tap_open(&sim);
-	if (ret < 0) {
-		perror("tap_open");
-		return -1;
+
+	for (i = 0; i < N; i++) {
+		sprintf(sim.phy[i].dev, "%s/%s%d", TAP_PATH, TAP_NAME, i);
+
+		ret = tap_open(&sim, i);
+		if (ret < 0) {
+			perror("tap_open");
+			return -1;
+		}
 	}
 
 	Verilated::commandArgs(argc, argv);

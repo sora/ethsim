@@ -11,7 +11,7 @@ RTL_SRC := dut.v
 all: tap
 
 run: tap
-	./run.sh 
+	./run.sh $(DEVNUM)
 
 tap: mktap.c rmtap.c
 	gcc $(CFLAGS) -o mktap  mktap.c
