@@ -25,19 +25,42 @@
 #define MAXNUMDEV    8
 
 #define TAP_PATH     "/dev/net"
+#define TAP_NAME     "phy"
 #define TAP_MAJOR    10
 #define TAP_MINOR    200
 
 
+int tap_mkchardev(char *dev)
+{
+	char devpath[IFNAMSIZ + 9];
+	dev_t devnum = 0;
+	int ret;
+
+	sprintf(devpath, "%s/%s", TAP_PATH, dev);
+
+	devnum = makedev(TAP_MAJOR, TAP_MINOR);
+
+	ret = mknod(devpath, S_IFCHR|0666, devnum);
+	if (ret < 0) {
+		perror("mknod");
+		return -1;
+	}
+
+	return 0;
+}
+
 /*
  * tap_init
  */
-int tap_init(char *dev)
+int tap_init(char *dev, int mode)
 {
+	char devpath[IFNAMSIZ + 9];
 	struct ifreq ifr;
 	int fd, err;
 
-	fd = open("/dev/net/tun", O_RDWR);
+	sprintf(devpath, "%s/%s", TAP_PATH, dev);
+
+	fd = open(devpath, O_RDWR);
 	if (fd < 0) {
 		perror("open");
 		return -1;
@@ -57,30 +80,11 @@ int tap_init(char *dev)
 	}
 
 	/* enable persistent mode */
-	if (ioctl(fd, TUNSETPERSIST, 1) != 0) {
+	if (ioctl(fd, TUNSETPERSIST, mode) != 0) {
 		perror("ioctl(TUNSETPERSIST)");
 	}
 
 	return fd;
-}
-
-int tap_mkchardev(char *dev)
-{
-	char devpath[IFNAMSIZ + 9];
-	dev_t devnum = 0;
-	int ret;
-
-	sprintf(devpath, "%s/%s", TAP_PATH, dev);
-
-	devnum = makedev(TAP_MAJOR, TAP_MINOR);
-
-	ret = mknod(devpath, S_IFCHR|0666, devnum);
-	if (ret < 0) {
-		perror("mknod");
-		return -1;
-	}
-
-	return 0;
 }
 
 int tap_config(char *dev, int n)
@@ -131,9 +135,19 @@ int tap_config(char *dev, int n)
 	return 0;
 }
 
+int tap_release(char *dev)
+{
+	char devpath[IFNAMSIZ + 9];
+
+	sprintf(devpath, "%s/phy%d", TAP_PATH, i);
+	unlink(devpath);
+
+	return 0;
+}
+
 void usage(void)
 {
-	fprintf(stderr, "Usage:tapdev {number_of_devices}\n");
+	fprintf(stderr, "Usage:tapdev {add or del} {number_of_devices}\n");
 }
 
 
@@ -142,15 +156,26 @@ void usage(void)
  */
 int main(int argc, char **argv)
 {
-	int i, ndev, ret, fd[MAXNUMDEV];
 	char dev[IFNAMSIZ];
+	int mode, i, ndev, ret;
+	char mode_ascii[4];
 
-	if (argc != 2) {
+	if (argc != 3) {
 		usage();
 		return 1;
 	}
 
-	ndev = atoi(argv[1]);
+	strncpy(mode, argv[1], 4);
+	if ((ret = strcmp(mode_ascii, "add")) == 0) {
+		mode = 1;
+	} else if ((strcmp(mode_ascii, "del")) == 0) {
+		mode = 0;
+	} else {
+		printf("unknown command: %s\n", mode_ascii);
+		return 1;
+	}
+
+	ndev = atoi(argv[2]);
 	if (ndev < 1 || ndev > MAXNUMDEV) {
 		usage();
 		return 1;
@@ -158,24 +183,38 @@ int main(int argc, char **argv)
 
 	/* tap device setup */
 	for (i = 0; i < ndev; i++) {
-		sprintf(dev, "phy%d", i);
+		sprintf(dev, "%s%d", TAP_NAME, i);
 
-		fd[i] = tap_init(dev);
-		if (fd[i] < 0) {
-			perror("tap_init");
-			return 1;
-		}
+		if (mode == make) {
+			ret = tap_mkchardev(dev);
+			if (ret < 0) {
+				perror("tap_mkchardev");
+				return 1;
+			}
 
-		ret = tap_mkchardev(dev);
-		if (ret < 0) {
-			perror("tap_mkchardev");
-			return 1;
-		}
+			ret = tap_init(dev, mode);
+			if (ret < 0) {
+				perror("tap_init");
+				return 1;
+			}
 
-		ret = tap_config(dev, i);
-		if (ret < 0) {
-			perror("tap_config");
-			return 1;
+			ret = tap_config(dev, i);
+			if (ret < 0) {
+				perror("tap_config");
+				return 1;
+			}
+		} else if (mode == release) {
+			ret = tap_init(dev, mode);
+			if (ret < 0) {
+				perror("tap_init");
+				return 1;
+			}
+
+			ret = tap_release(dev);
+			if (ret < 0) {
+				perror("tap_release");
+				return 1;
+			}
 		}
 	}
 	

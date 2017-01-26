@@ -25,6 +25,7 @@
 #define MAXNUMDEV    8
 
 #define TAP_PATH     "/dev/net"
+#define TAP_NAME     "phy"
 #define TAP_MAJOR    10
 #define TAP_MINOR    200
 
@@ -34,10 +35,13 @@
  */
 int tap_release(char *dev)
 {
+	char devpath[IFNAMSIZ + 9];
 	struct ifreq ifr;
 	int fd, err;
 
-	fd = open("/dev/net/tun", O_RDWR);
+	sprintf(devpath, "%s/%s", TAP_PATH, dev);
+
+	fd = open(devpath, O_RDWR);
 	if (fd < 0) {
 		perror("open");
 		return -1;
