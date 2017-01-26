@@ -13,9 +13,8 @@ all: tap
 run: tap
 	./run.sh $(DEVNUM)
 
-tap: mktap.c rmtap.c
-	gcc $(CFLAGS) -o mktap  mktap.c
-	gcc $(CFLAGS) -o rmtap  rmtap.c
+tap: ethsim.c
+	gcc $(CFLAGS) -o ethsim ethsim.c
 
 sim: $(VERILATOR_SRC) $(SIM_SRC) $(RTL_SRC)
 	verilator $(WFLAGS) -DSIMULATION --cc --trace --top-module testbench -sv $(SIM_SRC) $(RTL_SRC) --exe $(VERILATOR_SRC)
@@ -25,5 +24,6 @@ sim: $(VERILATOR_SRC) $(SIM_SRC) $(RTL_SRC)
 .PHONY: clean
 clean:
 	rm -f mktap rmtap
+	rm -f ethsim
 	rm -f wave.vcd
 	rm -rf obj_dir

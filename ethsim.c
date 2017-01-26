@@ -30,17 +30,37 @@
 #define TAP_MINOR    200
 
 
+int tap_mkchardev(char *dev)
+{
+	char devpath[IFNAMSIZ + 9];
+	dev_t devnum = 0;
+	int ret;
+
+	sprintf(devpath, "%s/%s", TAP_PATH, dev);
+
+	devnum = makedev(TAP_MAJOR, TAP_MINOR);
+
+	ret = mknod(devpath, S_IFCHR|0666, devnum);
+	if (ret < 0) {
+		perror("mknod");
+		return -1;
+	}
+
+	return 0;
+}
+
 /*
  * tap_init
  */
-#define TAP_CREATE    1
-#define TAP_RELEASE   0
 int tap_init(char *dev, int mode)
 {
+	char devpath[IFNAMSIZ + 9];
 	struct ifreq ifr;
 	int fd, err;
 
-	fd = open("/dev/net/tun", O_RDWR);
+	sprintf(devpath, "%s/%s", TAP_PATH, dev);
+
+	fd = open(devpath, O_RDWR);
 	if (fd < 0) {
 		perror("open");
 		return -1;
@@ -65,25 +85,6 @@ int tap_init(char *dev, int mode)
 	}
 
 	return fd;
-}
-
-int tap_mkchardev(char *dev)
-{
-	char devpath[IFNAMSIZ + 9];
-	dev_t devnum = 0;
-	int ret;
-
-	sprintf(devpath, "%s/%s", TAP_PATH, dev);
-
-	devnum = makedev(TAP_MAJOR, TAP_MINOR);
-
-	ret = mknod(devpath, S_IFCHR|0666, devnum);
-	if (ret < 0) {
-		perror("mknod");
-		return -1;
-	}
-
-	return 0;
 }
 
 int tap_config(char *dev, int n)
@@ -134,9 +135,19 @@ int tap_config(char *dev, int n)
 	return 0;
 }
 
+int tap_release(char *dev)
+{
+	char devpath[IFNAMSIZ + 9];
+
+	sprintf(devpath, "%s/%s", TAP_PATH, dev);
+	unlink(devpath);
+
+	return 0;
+}
+
 void usage(void)
 {
-	fprintf(stderr, "Usage:tapdev {number_of_devices}\n");
+	fprintf(stderr, "Usage:tapdev {add or del} {number_of_devices}\n");
 }
 
 
@@ -145,18 +156,23 @@ void usage(void)
  */
 int main(int argc, char **argv)
 {
-	int i, ndev, ret, fd[MAXNUMDEV];
 	char dev[IFNAMSIZ];
-	char mode[0x1F];
+	int mode, i, ndev, ret;
+	char mode_ascii[4];
 
 	if (argc != 3) {
 		usage();
 		return 1;
 	}
 
-	strncpy(mode, argv[1], 3);
-	for (i = 0; i < 3; i++) {
-		isdigit
+	strncpy(mode_ascii, argv[1], 4);
+	if ((ret = strcmp(mode_ascii, "add")) == 0) {
+		mode = 1;
+	} else if ((strcmp(mode_ascii, "del")) == 0) {
+		mode = 0;
+	} else {
+		printf("unknown command: %s\n", mode_ascii);
+		return 1;
 	}
 
 	ndev = atoi(argv[2]);
@@ -169,22 +185,36 @@ int main(int argc, char **argv)
 	for (i = 0; i < ndev; i++) {
 		sprintf(dev, "%s%d", TAP_NAME, i);
 
-		fd[i] = tap_init(dev, mode);
-		if (fd[i] < 0) {
-			perror("tap_init");
-			return 1;
-		}
+		if (mode == 1) {
+			ret = tap_mkchardev(dev);
+			if (ret < 0) {
+				perror("tap_mkchardev");
+				return 1;
+			}
 
-		ret = tap_mkchardev(dev);
-		if (ret < 0) {
-			perror("tap_mkchardev");
-			return 1;
-		}
+			ret = tap_init(dev, mode);
+			if (ret < 0) {
+				perror("tap_init");
+				return 1;
+			}
 
-		ret = tap_config(dev, i);
-		if (ret < 0) {
-			perror("tap_config");
-			return 1;
+			ret = tap_config(dev, i);
+			if (ret < 0) {
+				perror("tap_config");
+				return 1;
+			}
+		} else if (mode == 0) {
+			ret = tap_init(dev, mode);
+			if (ret < 0) {
+				perror("tap_init");
+				return 1;
+			}
+
+			ret = tap_release(dev);
+			if (ret < 0) {
+				perror("tap_release");
+				return 1;
+			}
 		}
 	}
 	
