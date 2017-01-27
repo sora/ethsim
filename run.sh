@@ -2,20 +2,18 @@
 
 set -e
 
-if [ $# -ne 1 ]; then
-	echo "usage: run.sh {num_of_tun_devices}" 1>&2
+if [ $# -ne 2 ]; then
+	echo "usage: run.sh {num_of_tun_devices} {user_name}" 1>&2
 	exit 1
 fi
 
 NDEV=$1
+UNAME=$2
 
-# read sudo password from stdin
-printf "sudo password: "
-read -s password
-echo
+MYUID=`/usr/bin/id -u ${UNAME}`
+MYGID=`/usr/bin/id -g ${UNAME}`
 
-# run
-echo "$password" | /usr/bin/sudo -S ./mktap $NDEV
-sleep 60
-echo "$password" | /usr/bin/sudo -S ./rmtap $NDEV
+./tapctl add ${NDEV} ${MYUID} ${MYGID}
+sleep 10
+./tapctl del ${NDEV} ${MYUID} ${MYGID}
 
