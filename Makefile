@@ -8,13 +8,13 @@ VERILATOR_SRC := sim_main.cpp
 SIM_SRC := testbench.sv
 RTL_SRC := dut.v
 
-all: tap
+all: tapctl
 
-run: tap
+run: tapctl
 	./run.sh $(DEVNUM)
 
-tap: ethsim.c
-	gcc $(CFLAGS) -o ethsim ethsim.c
+tapctl: tapctl.c
+	gcc $(CFLAGS) -o tapctl tapctl.c
 
 sim: $(VERILATOR_SRC) $(SIM_SRC) $(RTL_SRC)
 	verilator $(WFLAGS) -DSIMULATION --cc --trace --top-module testbench -sv $(SIM_SRC) $(RTL_SRC) --exe $(VERILATOR_SRC)
@@ -23,7 +23,6 @@ sim: $(VERILATOR_SRC) $(SIM_SRC) $(RTL_SRC)
 
 .PHONY: clean
 clean:
-	rm -f mktap rmtap
-	rm -f ethsim
+	rm -f tapctl
 	rm -f wave.vcd
 	rm -rf obj_dir
