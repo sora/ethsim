@@ -91,11 +91,21 @@ static inline void cold_reset(struct sim *s)
 		s->top->cold_reset = 1;
 }
 
+static inline int eth_read(struct phy *phy)
+{
+	return read(phy->fd, phy->rx.buf, sizeof(phy->rx.buf));
+}
+
+static inline int eth_write(struct phy *phy)
+{
+	return write(phy->fd, phy->tx.buf, sizeof(phy->tx.buf));
+}
+
 static inline int eth_recv(struct phy *phy)
 {
 	int ret;
 
-	ret = read(phy->fd, phy->rx.buf, sizeof(phy->rx.buf));
+	ret = eth_read(phy);
 	if (ret < 0) {
 		perror("read");
 		return -1;
@@ -108,7 +118,7 @@ static inline int eth_send(struct phy *phy)
 {
 	int ret;
 
-	ret = write(phy->fd, phy->tx.buf, sizeof(phy->tx.buf));
+	ret = eth_write(phy);
 	if (ret < 0) {
 		perror("read");
 		return -1;
@@ -120,7 +130,7 @@ static inline int eth_send(struct phy *phy)
 int main(int argc, char** argv)
 {
 	struct sim sim;
-	int i, ret;
+	int i, ret, do_sim, timeout = 200;
 
 	sim.ndev = N;  // todo
 
@@ -163,7 +173,7 @@ int main(int argc, char** argv)
 	sim.top->cold_reset = 0;
 
 	// run
-	for (;;) {
+	while (--timeout) {
 		// timeout
 		if (sim.main_time > 200) {
 			break;
@@ -173,9 +183,12 @@ int main(int argc, char** argv)
 
 		poll(sim.poll_fds, sim.ndev, 0);
 
+		do_sim = 0;
+
 		for (i = 0; i < sim.ndev; i++) {
 
 			if (sim.poll_fds[i].revents & POLLIN) {
+				do_sim = 1;
 				ret = eth_recv(&sim.phy[i]);
 				if (ret < 0) {
 					perror("eth_recv()");
@@ -184,6 +197,7 @@ int main(int argc, char** argv)
 			}
 
 			if (sim.phy[i].tx.ready) {
+				do_sim = 1;
 				ret = eth_send(&sim.phy[i]);
 				if (ret < 0) {
 					perror("eth_send()");
@@ -192,8 +206,10 @@ int main(int argc, char** argv)
 			}
 		}
 
-		clock(&sim);
-		tick(&sim);
+		if (do_sim) {
+			clock(&sim);
+			tick(&sim);
+		}
 	}
 
 	sim.tfp->close();
