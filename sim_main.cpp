@@ -4,6 +4,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <stdint.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -21,9 +22,9 @@
 #define N    1
 
 struct port {
-	unsigned int ready;
-	unsigned int pos;
+	unsigned int rdy;
 	unsigned int len;
+	unsigned int pos;
 	unsigned char buf[2048];
 };
 
@@ -87,50 +88,55 @@ static inline void clock(struct sim *s)
 
 static inline void cold_reset(struct sim *s)
 {
-	if ((s->main_time % 20) == 0)
-		s->top->cold_reset = 1;
-}
-
-static inline int eth_read(struct phy *phy)
-{
-	return read(phy->fd, phy->rx.buf, sizeof(phy->rx.buf));
-}
-
-static inline int eth_write(struct phy *phy)
-{
-	return write(phy->fd, phy->tx.buf, sizeof(phy->tx.buf));
+	int budget = 10;
+	while (--budget) {
+		clock(s);
+		tick(s);
+	}
+	s->top->cold_reset = 0;
 }
 
 static inline int eth_recv(struct phy *phy)
 {
-	int ret;
-
-	ret = eth_read(phy);
-	if (ret < 0) {
-		perror("read");
-		return -1;
-	}
-
-	return 0;
+	return (phy->rx.len = read(phy->fd, phy->rx.buf, sizeof(phy->rx.buf)));
 }
 
 static inline int eth_send(struct phy *phy)
 {
-	int ret;
+	return write(phy->fd, phy->tx.buf, phy->tx.pos);
+}
 
-	ret = eth_write(phy);
-	if (ret < 0) {
-		perror("read");
-		return -1;
-	}
+static inline void rxsim(struct sim *s, int n)
+{
+	struct port *rx = &s->phy[n].rx;
 
-	return 0;
+	s->top->s_axis_rx_tvalid = 1;
+	s->top->s_axis_rx_tkeep = 0xFF;
+	s->top->s_axis_rx_tuser = 0;
+
+	// s_axis_rx_tdata
+	*(uint64_t *)s->top->m_axis_tx_tdata = *(uint64_t *)&rx->buf[rx->pos];
+
+	s->top->s_axis_rx_tlast = (rx->pos == rx->len) ? 1 : 0;
+
+	++rx->pos;
+}
+
+static inline void txsim(struct sim *s, int n)
+{
+	struct port *tx = &s->phy[n].tx;
+
+	printf("tx_pos=%d\ttdata=%lu\n",
+		tx->pos, s->top->m_axis_tx_tdata);
+	*(uint64_t *)&tx->buf[tx->pos] = *(uint64_t *)s->top->m_axis_tx_tdata;
+
+	++tx->pos;
 }
 
 int main(int argc, char** argv)
 {
 	struct sim sim;
-	int i, ret, do_sim, timeout = 200;
+	int i, ret, do_sim, timeout = 2000;
 
 	sim.ndev = N;  // todo
 
@@ -143,9 +149,12 @@ int main(int argc, char** argv)
 	for (i = 0; i < sim.ndev; i++) {
 		sprintf(sim.phy[i].dev, "%s/%s%d", TAP_PATH, TAP_NAME, i);
 
-		sim.phy[i].tx.ready = 0;
-
-		sim.phy[i].rx.ready = 0;
+		sim.phy[i].tx.pos = 0;
+		sim.phy[i].rx.pos = 0;
+		sim.phy[i].tx.rdy = 0;    // unused
+		sim.phy[i].rx.rdy = 0;
+		sim.phy[i].tx.len = 0;    // unused
+		sim.phy[i].rx.len = 0;
 
 		ret = tap_open(&sim.phy[i]);
 		if (ret < 0) {
@@ -170,16 +179,16 @@ int main(int argc, char** argv)
 
 	// init
 	sim.top->clk156 = 0;
-	sim.top->cold_reset = 0;
+	sim.top->cold_reset = 1;
+
+	cold_reset(&sim);
 
 	// run
 	while (--timeout) {
 		// timeout
-		if (sim.main_time > 200) {
-			break;
-		}
-
-		cold_reset(&sim);
+		//if (sim.main_time > 200) {
+		//	break;
+		//}
 
 		poll(sim.poll_fds, sim.ndev, 0);
 
@@ -187,29 +196,54 @@ int main(int argc, char** argv)
 
 		for (i = 0; i < sim.ndev; i++) {
 
-			if (sim.poll_fds[i].revents & POLLIN) {
+			printf("main_time=%u\tcold_reset=%d\ttx_tvalid=%d\n",
+				(uint32_t)sim.main_time, sim.top->cold_reset,
+				sim.top->m_axis_tx_tvalid);
+
+			// RX simulation
+			if (sim.phy[i].rx.rdy) {
 				do_sim = 1;
-				ret = eth_recv(&sim.phy[i]);
-				if (ret < 0) {
-					perror("eth_recv()");
-					break;
+				rxsim(&sim, i);
+			} else {
+				sim.phy[i].rx.rdy = 0;
+
+				// packet received
+				if (sim.poll_fds[i].revents & POLLIN) {
+					sim.phy[i].rx.rdy = 1;
+					sim.phy[i].rx.pos = 0;
+
+					ret = eth_recv(&sim.phy[i]);
+					if (ret < 0) {
+						perror("eth_recv");
+						break;
+					}
+
+					sim.phy[i].rx.len = ret;
 				}
 			}
 
-			if (sim.phy[i].tx.ready) {
+			// TX simulation
+			if (sim.top->m_axis_tx_tvalid) {
 				do_sim = 1;
-				ret = eth_send(&sim.phy[i]);
-				if (ret < 0) {
-					perror("eth_send()");
-					break;
+				txsim(&sim, i);
+
+				// packet send
+				if (sim.top->m_axis_tx_tlast) {
+					ret = eth_send(&sim.phy[i]);
+					if (ret < 0) {
+						perror("eth_write");
+						break;
+					}
 				}
+			} else {
+				sim.phy[i].tx.pos = 0;
 			}
 		}
 
-		if (do_sim) {
+		//if (do_sim) {
 			clock(&sim);
 			tick(&sim);
-		}
+		//}
 	}
 
 	sim.tfp->close();
