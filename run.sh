@@ -14,6 +14,6 @@ MYUID=`/usr/bin/id -u ${UNAME}`
 MYGID=`/usr/bin/id -g ${UNAME}`
 
 ./tapctl add ${NDEV} ${MYUID} ${MYGID}
-sleep 10
-./tapctl del ${NDEV} ${MYUID} ${MYGID}
+#sleep 10
+#./tapctl del ${NDEV} ${MYUID} ${MYGID}
 

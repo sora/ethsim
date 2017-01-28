@@ -10,7 +10,7 @@ RTL_SRC := dut.v
 
 all: tapctl
 
-run: tapctl
+run: tapctl sim
 	./run.sh $(DEVNUM)
 
 tapctl: tapctl.c

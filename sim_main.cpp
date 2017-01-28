@@ -2,9 +2,11 @@
 #include <verilated_vcd_c.h>
 #include "Vtestbench.h"
 
+#include <fcntl.h>
+#include <poll.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 
 #define SFP_CLK           (64/2)        // 6.4 ns (156.25 MHz)
 
@@ -12,12 +14,14 @@
 #define SIM_TIME_RESOLUTION   "100 ps"
 
 #define IFNAMSIZ     256
-#define TAP_PATH     "/dev/net"
+#define TAP_PATH     "/tmp"
 #define TAP_NAME     "phy"
 
+#define MAXNUMDEV    8
 #define N    1
 
 struct port {
+	unsigned int ready;
 	unsigned int pos;
 	unsigned int len;
 	unsigned char buf[2048];
@@ -37,8 +41,36 @@ struct sim {
 	
 	VerilatedVcdC *tfp;
 
+	int ndev;
+
 	struct phy *phy;
+
+	struct pollfd poll_fds[MAXNUMDEV];
 };
+
+int tap_open(struct phy *phy)
+{
+	phy->fd = open(phy->dev, O_RDWR);
+	if (phy->fd < 0) {
+		perror("open");
+		goto err;
+	}
+
+err:
+	return phy->fd;
+}
+
+void poll_init(struct sim *s)
+{
+	int i, ret;
+
+	memset(&s->poll_fds, 0, sizeof(s->poll_fds));
+
+	for (i = 0; i < s->ndev; i++) {
+		s->poll_fds[i].fd = s->phy[i].fd;
+		s->poll_fds[i].events = POLLIN;
+	}
+}
 
 static inline void tick(struct sim *s)
 {
@@ -59,25 +91,29 @@ static inline void cold_reset(struct sim *s)
 		s->top->cold_reset = 1;
 }
 
-static inline int tap_open(struct phy *phy)
-{
-	phy->fd = open(phy->dev, O_RDWR);
-	if (phy->fd < 0) {
-		perror("open");
-		goto err;
-	}
-
-err:
-	return phy->fd;
-}
-
 static inline int eth_recv(struct phy *phy)
 {
+	int ret;
+
+	ret = read(phy->fd, phy->rx.buf, sizeof(phy->rx.buf));
+	if (ret < 0) {
+		perror("read");
+		return -1;
+	}
+
 	return 0;
 }
 
 static inline int eth_send(struct phy *phy)
 {
+	int ret;
+
+	ret = write(phy->fd, phy->tx.buf, sizeof(phy->tx.buf));
+	if (ret < 0) {
+		perror("read");
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -86,14 +122,20 @@ int main(int argc, char** argv)
 	struct sim sim;
 	int i, ret;
 
-	sim.phy = (struct phy *)malloc(sizeof(struct phy) * N);
+	sim.ndev = N;  // todo
+
+	sim.phy = (struct phy *)malloc(sizeof(struct phy) * sim.ndev);
 	if (sim.phy == NULL) {
 		perror("malloc");
 		return -1;
 	}
 
-	for (i = 0; i < N; i++) {
+	for (i = 0; i < sim.ndev; i++) {
 		sprintf(sim.phy[i].dev, "%s/%s%d", TAP_PATH, TAP_NAME, i);
+
+		sim.phy[i].tx.ready = 0;
+
+		sim.phy[i].rx.ready = 0;
 
 		ret = tap_open(&sim.phy[i]);
 		if (ret < 0) {
@@ -101,6 +143,8 @@ int main(int argc, char** argv)
 			return -1;
 		}
 	}
+
+	poll_init(&sim);
 
 	Verilated::commandArgs(argc, argv);
 	Verilated::traceEverOn(true);
@@ -127,17 +171,24 @@ int main(int argc, char** argv)
 
 		cold_reset(&sim);
 
-		for (i = 0; i < N; i++) {
-			ret = eth_recv(&sim.phy[i]);
-			if (ret < 0) {
-				perror("eth_recv()");
-				break;
+		poll(sim.poll_fds, sim.ndev, 0);
+
+		for (i = 0; i < sim.ndev; i++) {
+
+			if (sim.poll_fds[i].revents & POLLIN) {
+				ret = eth_recv(&sim.phy[i]);
+				if (ret < 0) {
+					perror("eth_recv()");
+					break;
+				}
 			}
 
-			ret = eth_send(&sim.phy[i]);
-			if (ret < 0) {
-				perror("eth_send()");
-				break;
+			if (sim.phy[i].tx.ready) {
+				ret = eth_send(&sim.phy[i]);
+				if (ret < 0) {
+					perror("eth_send()");
+					break;
+				}
 			}
 		}
 
