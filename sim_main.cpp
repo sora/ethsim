@@ -47,6 +47,13 @@ struct sim {
 	struct phy *phy;
 
 	struct pollfd poll_fds[MAXNUMDEV];
+
+	int do_sim;
+
+	int gap_budget;
+
+	int txpackets;
+	int rxpackets;
 };
 
 int tap_open(struct phy *phy)
@@ -89,6 +96,7 @@ static inline void clock(struct sim *s)
 static inline void cold_reset(struct sim *s)
 {
 	int budget = 10;
+
 	while (--budget) {
 		clock(s);
 		tick(s);
@@ -117,9 +125,15 @@ static inline void rxsim(struct sim *s, int n)
 	// s_axis_rx_tdata
 	*(uint64_t *)s->top->m_axis_tx_tdata = *(uint64_t *)&rx->buf[rx->pos];
 
-	s->top->s_axis_rx_tlast = (rx->pos == rx->len) ? 1 : 0;
+	if (rx->pos == rx->len) {
+		s->top->s_axis_rx_tlast = 1;
+		s->gap_budget = 10;
+	} else {
+		s->top->s_axis_rx_tlast = 0;
+	}
 
 	++rx->pos;
+	s->do_sim = 1;
 }
 
 static inline void txsim(struct sim *s, int n)
@@ -131,12 +145,13 @@ static inline void txsim(struct sim *s, int n)
 	*(uint64_t *)&tx->buf[tx->pos] = *(uint64_t *)s->top->m_axis_tx_tdata;
 
 	++tx->pos;
+	s->do_sim = 1;
 }
 
 int main(int argc, char** argv)
 {
 	struct sim sim;
-	int i, ret, do_sim, timeout = 2000;
+	int i, ret; //, timeout = 2000;
 
 	sim.ndev = N;  // todo
 
@@ -183,48 +198,59 @@ int main(int argc, char** argv)
 
 	cold_reset(&sim);
 
+	sim.txpackets = 0;
+	sim.rxpackets = 0;
+	sim.gap_budget = 10;
+
 	// run
-	while (--timeout) {
-		// timeout
-		//if (sim.main_time > 200) {
-		//	break;
-		//}
+//	while (--timeout) {
+	while (1) {
+		if (sim.rxpackets > 1) {
+			printf("Simulation finished. rxpackets=%d\n", sim.rxpackets);
+			break;
+		}
+
+
+		sim.do_sim = 0;
 
 		poll(sim.poll_fds, sim.ndev, 0);
 
-		do_sim = 0;
-
 		for (i = 0; i < sim.ndev; i++) {
 
+#if 0
 			printf("main_time=%u\tcold_reset=%d\ttx_tvalid=%d\n",
 				(uint32_t)sim.main_time, sim.top->cold_reset,
 				sim.top->m_axis_tx_tvalid);
+#endif
 
 			// RX simulation
-			if (sim.phy[i].rx.rdy) {
-				do_sim = 1;
-				rxsim(&sim, i);
+			if (sim.gap_budget > 0) {
+				// insert a gap when receiving a packet
+				--sim.gap_budget;
 			} else {
-				sim.phy[i].rx.rdy = 0;
+				if (sim.phy[i].rx.rdy) {
+					rxsim(&sim, i);
+				} else {
+					sim.phy[i].rx.rdy = 0;
 
-				// packet received
-				if (sim.poll_fds[i].revents & POLLIN) {
-					sim.phy[i].rx.rdy = 1;
-					sim.phy[i].rx.pos = 0;
+					// packet received
+					if (sim.poll_fds[i].revents & POLLIN) {
+						sim.phy[i].rx.rdy = 1;
+						sim.phy[i].rx.pos = 0;
 
-					ret = eth_recv(&sim.phy[i]);
-					if (ret < 0) {
-						perror("eth_recv");
-						break;
+						ret = eth_recv(&sim.phy[i]);
+						if (ret < 0) {
+							perror("eth_recv");
+							break;
+						}
+
+						sim.phy[i].rx.len = ret;
 					}
-
-					sim.phy[i].rx.len = ret;
 				}
 			}
 
 			// TX simulation
 			if (sim.top->m_axis_tx_tvalid) {
-				do_sim = 1;
 				txsim(&sim, i);
 
 				// packet send
@@ -240,10 +266,10 @@ int main(int argc, char** argv)
 			}
 		}
 
-		//if (do_sim) {
+		if (sim.do_sim) {
 			clock(&sim);
 			tick(&sim);
-		//}
+		}
 	}
 
 	sim.tfp->close();
