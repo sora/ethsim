@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <stdint.h>
+#include <signal.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -20,6 +21,8 @@
 
 #define MAXNUMDEV    8
 #define N    1
+
+int caught_signal = 0;
 
 struct port {
 	unsigned int rdy;
@@ -56,6 +59,19 @@ struct sim {
 	int rxpackets;
 };
 
+
+void sig_handler(int sig) {
+	if (sig == SIGINT)
+		caught_signal = 1;
+}
+
+void set_signal(int sig) {
+	if ( signal(sig, sig_handler) == SIG_ERR ) {
+		fprintf( stderr, "Cannot set signal\n" );
+		exit(1);
+	}
+}
+
 int tap_open(struct phy *phy)
 {
 	phy->fd = open(phy->dev, O_RDWR);
@@ -76,7 +92,7 @@ void poll_init(struct sim *s)
 
 	for (i = 0; i < s->ndev; i++) {
 		s->poll_fds[i].fd = s->phy[i].fd;
-		s->poll_fds[i].events = POLLIN;
+		s->poll_fds[i].events = POLLIN | POLLERR;
 	}
 }
 
@@ -118,6 +134,8 @@ static inline void rxsim(struct sim *s, int n)
 {
 	struct port *rx = &s->phy[n].rx;
 
+	printf("rxsim\n");
+
 	s->top->s_axis_rx_tvalid = 1;
 	s->top->s_axis_rx_tkeep = 0xFF;
 	s->top->s_axis_rx_tuser = 0;
@@ -139,6 +157,8 @@ static inline void rxsim(struct sim *s, int n)
 static inline void txsim(struct sim *s, int n)
 {
 	struct port *tx = &s->phy[n].tx;
+
+	printf("txsim\n");
 
 	printf("tx_pos=%d\ttdata=%lu\n",
 		tx->pos, s->top->m_axis_tx_tdata);
@@ -202,9 +222,15 @@ int main(int argc, char** argv)
 	sim.rxpackets = 0;
 	sim.gap_budget = 10;
 
+	set_signal(SIGINT);
+
 	// run
 //	while (--timeout) {
 	while (1) {
+		if (caught_signal)
+			break;
+
+
 		if (sim.rxpackets > 1) {
 			printf("Simulation finished. rxpackets=%d\n", sim.rxpackets);
 			break;
@@ -233,10 +259,13 @@ int main(int argc, char** argv)
 				} else {
 					sim.phy[i].rx.rdy = 0;
 
+
 					// packet received
 					if (sim.poll_fds[i].revents & POLLIN) {
 						sim.phy[i].rx.rdy = 1;
 						sim.phy[i].rx.pos = 0;
+
+						printf("rx.dry: i=%d\n", i);
 
 						ret = eth_recv(&sim.phy[i]);
 						if (ret < 0) {
