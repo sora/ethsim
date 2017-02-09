@@ -145,7 +145,7 @@ static inline void rxsim(struct sim *s, int n)
 
 	if (rx->pos == rx->len) {
 		s->top->s_axis_rx_tlast = 1;
-		s->gap_budget = 10;
+		s->gap_budget = 3;
 	} else {
 		s->top->s_axis_rx_tlast = 0;
 	}
@@ -220,7 +220,7 @@ int main(int argc, char** argv)
 
 	sim.txpackets = 0;
 	sim.rxpackets = 0;
-	sim.gap_budget = 10;
+	sim.gap_budget = 3;
 
 	set_signal(SIGINT);
 
@@ -243,16 +243,18 @@ int main(int argc, char** argv)
 
 		for (i = 0; i < sim.ndev; i++) {
 
-#if 0
 			printf("main_time=%u\tcold_reset=%d\ttx_tvalid=%d\n",
 				(uint32_t)sim.main_time, sim.top->cold_reset,
 				sim.top->m_axis_tx_tvalid);
-#endif
 
 			// RX simulation
 			if (sim.gap_budget > 0) {
 				// insert a gap when receiving a packet
-				--sim.gap_budget;
+				if ((sim.main_time % SFP_CLK) == 0) {
+					--sim.gap_budget;
+				}
+				sim.do_sim = 1;
+				break;
 			} else {
 				if (sim.phy[i].rx.rdy) {
 					rxsim(&sim, i);
