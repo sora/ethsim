@@ -20,11 +20,16 @@
 #define TAP_NAME     "phy"
 
 #define MAXNUMDEV    8
-#define N    1
+#define N    2
 
 int caught_signal = 0;
 
-struct port {
+struct tx {
+	unsigned int pos;
+	unsigned char buf[2048];
+};
+
+struct rx {
 	unsigned int rdy;
 	unsigned int len;
 	unsigned int pos;
@@ -34,8 +39,8 @@ struct port {
 struct phy {
 	char dev[IFNAMSIZ];
 	int fd;
-	struct port tx;
-	struct port rx;
+	struct tx tx;
+	struct rx rx;
 };
 
 struct sim {
@@ -132,16 +137,16 @@ static inline int eth_send(struct phy *phy)
 
 static inline void rxsim(struct sim *s, int n)
 {
-	struct port *rx = &s->phy[n].rx;
+	struct rx *rx = &s->phy[n].rx;
 
-	printf("rxsim\n");
+	printf("rxsim: rx->buf=%llu\n", *(uint64_t *)&rx->buf[rx->pos]);
 
 	s->top->s_axis_rx_tvalid = 1;
 	s->top->s_axis_rx_tkeep = 0xFF;
 	s->top->s_axis_rx_tuser = 0;
 
 	// s_axis_rx_tdata
-	*(uint64_t *)s->top->m_axis_tx_tdata = *(uint64_t *)&rx->buf[rx->pos];
+	*(uint64_t *)s->top->s_axis_rx_tdata = *(uint64_t *)&rx->buf[rx->pos];
 
 	if (rx->pos == rx->len) {
 		s->top->s_axis_rx_tlast = 1;
@@ -156,7 +161,7 @@ static inline void rxsim(struct sim *s, int n)
 
 static inline void txsim(struct sim *s, int n)
 {
-	struct port *tx = &s->phy[n].tx;
+	struct tx *tx = &s->phy[n].tx;
 
 	printf("txsim\n");
 
@@ -186,9 +191,7 @@ int main(int argc, char** argv)
 
 		sim.phy[i].tx.pos = 0;
 		sim.phy[i].rx.pos = 0;
-		sim.phy[i].tx.rdy = 0;    // unused
 		sim.phy[i].rx.rdy = 0;
-		sim.phy[i].tx.len = 0;    // unused
 		sim.phy[i].rx.len = 0;
 
 		ret = tap_open(&sim.phy[i]);
@@ -239,16 +242,21 @@ int main(int argc, char** argv)
 
 		sim.do_sim = 0;
 
-		poll(sim.poll_fds, sim.ndev, 0);
+		poll(sim.poll_fds, sim.ndev, 20000);
+		printf("stop\n");
 
 		for (i = 0; i < sim.ndev; i++) {
 
+#if 0
 			printf("main_time=%u\tcold_reset=%d\ttx_tvalid=%d\n",
 				(uint32_t)sim.main_time, sim.top->cold_reset,
 				sim.top->m_axis_tx_tvalid);
+#endif
 
 			// RX simulation
 			if (sim.gap_budget > 0) {
+				printf("gap\n");
+
 				// insert a gap when receiving a packet
 				if ((sim.main_time % SFP_CLK) == 0) {
 					--sim.gap_budget;
@@ -261,9 +269,9 @@ int main(int argc, char** argv)
 				} else {
 					sim.phy[i].rx.rdy = 0;
 
-
 					// packet received
-					if (sim.poll_fds[i].revents & POLLIN) {
+					if ((sim.poll_fds[i].revents & POLLIN) == POLLIN) {
+						printf("hoge\n");
 						sim.phy[i].rx.rdy = 1;
 						sim.phy[i].rx.pos = 0;
 
