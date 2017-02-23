@@ -27,7 +27,13 @@
 #define MAXNUMDEV    8
 #define N    2
 
-int caught_signal = 0;
+#define pr_err(S, ...)    fprintf(stderr, "\x1b[1m\x1b[31merror:\x1b[0m " S "\n", ##__VA_ARGS__)
+#define pr_warn(S, ...)   if(warn) fprintf(stderr, "\x1b[1m\x1b[33mwarn :\x1b[0m " S "\n", ##__VA_ARGS__)
+#define pr_debug(S, ...)  if (debug) fprintf(stderr, "\x1b[1m\x1b[90mdebug:\x1b[0m " S "\n", ##__VA_ARGS__)
+
+static int debug = 1;
+static int caught_signal = 0;
+
 
 struct tx {
 	unsigned int pos;
@@ -182,7 +188,7 @@ static inline unsigned int tkeep_bit(uint8_t n)
 		case 7: return 0xfe;
 		case 8: return 0xff;
 		default:
-			printf("tkeep_bit: unknown value\n");
+			pr_err("tkeep_bit: unknown value");
 			exit(1);
 	}
 }
@@ -203,10 +209,6 @@ static inline void rxsim(struct sim *s, int n)
 	uint8_t tkeep;
 	int i;
 
-	//printf("rxsim: n=%d, rx->pos=%d\n", n, rx->pos);
-	//printf("rxsim: rx->pos=%d, rx->buf=%llu\n",
-	//	rx->pos, *(uint64_t *)&rx->buf[rx->pos]);
-
 	s->top->s_axis_rx_tvalid = 1;
 	s->top->s_axis_rx_tuser = 0;
 
@@ -226,8 +228,8 @@ static inline void rxsim(struct sim *s, int n)
 		*(p+7-i) = *(uint8_t *)&rx->buf[rx->pos++];
 	}
 
-	printf("rxsim: n=%d, rdy=%d, rx->pos=%d, rx->len=%d, tkeep=%d, tkeep=%02X\n",
-		n, rx->rdy, rx->pos, rx->len, tkeep, s->top->s_axis_rx_tkeep);
+	pr_debug("rxsim: n=%d, rdy=%d, rx->pos=%d, rx->len=%d, tkeep=%d, tkeep=%02X",
+			n, rx->rdy, rx->pos, rx->len, tkeep, s->top->s_axis_rx_tkeep);
 
 	if (rx->pos == rx->len) {
 		s->top->s_axis_rx_tlast = 1;
@@ -235,7 +237,7 @@ static inline void rxsim(struct sim *s, int n)
 		rx->len = 0;
 		rx->pos = 0;
 		rx->gap = 3;
-		printf("----------------------------\n");
+		pr_debug("-------------------------");
 	} else {
 		s->top->s_axis_rx_tlast = 0;
 	}
@@ -249,12 +251,6 @@ static inline void txsim(struct sim *s, int n)
 	uint8_t *p = (uint8_t *)&s->top->m_axis_tx_tdata;
 	int i;
 
-	//printf("txsim\n");
-
-	//printf("tx_pos=%d\ttdata=%lu\n",
-	//	tx->pos, s->top->m_axis_tx_tdata);
-
-	//*(uint64_t *)&tx->buf[tx->pos] = *(uint64_t *)s->top->m_axis_tx_tdata;
 	for (i = 0; i < 8; i++) {
 		*(uint8_t *)&tx->buf[tx->pos++] = *(p+7-i);
 	}
@@ -276,7 +272,6 @@ int main(int argc, char** argv)
 	}
 
 	for (i = 0; i < sim.ndev; i++) {
-		//sprintf(sim.phy[i].dev, "%s/%s%d", TAP_PATH, TAP_NAME, i);
 		sprintf(sim.phy[i].dev, "%s%d", TAP_NAME, i);
 
 		sim.phy[i].tx.pos = 0;
@@ -359,7 +354,7 @@ int main(int argc, char** argv)
 							perror("eth_recv");
 							break;
 						}
-						printf("Received Packet: i=%d, count=%d\n", i, ret);
+						pr_debug("Received Packet: i=%d, count=%d", i, ret);
 
 						sim.phy[i].rx.len = ret;
 						sim.phy[i].rx.rdy = 1;
