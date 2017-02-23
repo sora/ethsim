@@ -31,7 +31,7 @@
 #define pr_warn(S, ...)   if(warn) fprintf(stderr, "\x1b[1m\x1b[33mwarn :\x1b[0m " S "\n", ##__VA_ARGS__)
 #define pr_debug(S, ...)  if (debug) fprintf(stderr, "\x1b[1m\x1b[90mdebug:\x1b[0m " S "\n", ##__VA_ARGS__)
 
-static int debug = 1;
+static int debug = 0;
 static int caught_signal = 0;
 
 
@@ -193,7 +193,7 @@ static inline unsigned int tkeep_bit(uint8_t n)
 	}
 }
 
-static inline void rxsim_zero(struct sim *s, int n)
+static inline void rxsim_idle(struct sim *s, int n)
 {
 	s->top->s_axis_rx_tvalid = 0;
 	s->top->s_axis_rx_tuser = 0;
@@ -256,6 +256,23 @@ static inline void txsim(struct sim *s, int n)
 	}
 
 	s->do_sim = 1;
+}
+
+static inline void pkt_recv(struct sim *s, int n)
+{
+	int count;
+
+	if ((s->poll_fds[n].revents & POLLIN) == POLLIN) {
+		count = eth_recv(&s->phy[n]);
+		if (count < 0) {
+			perror("eth_recv");
+			exit(1);
+		}
+		pr_debug("Received Packet: phy%d, count=%d", n, count);
+
+		s->phy[n].rx.len = count;
+		s->phy[n].rx.rdy = 1;
+	}
 }
 
 int main(int argc, char** argv)
@@ -337,7 +354,6 @@ int main(int argc, char** argv)
 				// insert a gap when receiving a packet
 				if ((sim.main_time % SFP_CLK) == 0) {
 					--sim.phy[i].rx.gap;
-					//printf("gap: i=%d n=%u\n", i, sim.phy[i].rx.gap);
 				}
 				sim.do_sim = 1;
 				break;
@@ -345,20 +361,8 @@ int main(int argc, char** argv)
 				if (sim.phy[i].rx.rdy) {
 					rxsim(&sim, i);
 				} else {
-					rxsim_zero(&sim, i);
-
-					// packet received
-					if ((sim.poll_fds[i].revents & POLLIN) == POLLIN) {
-						ret = eth_recv(&sim.phy[i]);
-						if (ret < 0) {
-							perror("eth_recv");
-							break;
-						}
-						pr_debug("Received Packet: i=%d, count=%d", i, ret);
-
-						sim.phy[i].rx.len = ret;
-						sim.phy[i].rx.rdy = 1;
-					}
+					rxsim_idle(&sim, i);
+					pkt_recv(&sim, i);
 				}
 			}
 
