@@ -27,6 +27,7 @@
 #define MAXNUMDEV    8
 #define N    2
 
+#define pr_info(S, ...)   printf("\x1b[1m\x1b[94minfo:\x1b[0m " S "\n", ##__VA_ARGS__)
 #define pr_err(S, ...)    fprintf(stderr, "\x1b[1m\x1b[31merror:\x1b[0m " S "\n", ##__VA_ARGS__)
 #define pr_warn(S, ...)   if(warn) fprintf(stderr, "\x1b[1m\x1b[33mwarn :\x1b[0m " S "\n", ##__VA_ARGS__)
 #define pr_debug(S, ...)  if (debug) fprintf(stderr, "\x1b[1m\x1b[90mdebug:\x1b[0m " S "\n", ##__VA_ARGS__)
@@ -247,9 +248,12 @@ static inline void rxsim(struct sim *s, int n)
 
 static inline void txsim(struct sim *s, int n)
 {
-	struct tx *tx = &s->phy[n].tx;
 	uint8_t *p = (uint8_t *)&s->top->m_axis_tx_tdata;
+	struct tx *tx = &s->phy[n].tx;
 	int i;
+
+	pr_info("txsim: n=%d, tx->pos=%d, tkeep=%02X",
+			n, tx->pos, s->top->s_axis_rx_tkeep);
 
 	for (i = 0; i < 8; i++) {
 		*(uint8_t *)&tx->buf[tx->pos++] = *(p+7-i);
@@ -356,7 +360,6 @@ int main(int argc, char** argv)
 					--sim.phy[i].rx.gap;
 				}
 				sim.do_sim = 1;
-				break;
 			} else {
 				if (sim.phy[i].rx.rdy) {
 					rxsim(&sim, i);
@@ -372,7 +375,6 @@ int main(int argc, char** argv)
 
 				// packet send
 				if (sim.top->m_axis_tx_tlast) {
-					//printf("tx_tlast\n");
 					ret = eth_send(&sim.phy[i]);
 					if (ret < 0) {
 						perror("eth_write");
