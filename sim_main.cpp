@@ -7,17 +7,22 @@
 #include <stdint.h>
 #include <signal.h>
 
+#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+
+#include <sys/socket.h>
+#include <linux/if.h>
+#include <linux/if_tun.h>
 
 #define SFP_CLK           (64/2)        // 6.4 ns (156.25 MHz)
 
 #define WAVE_FILE_NAME        "wave.vcd"
 #define SIM_TIME_RESOLUTION   "100 ps"
 
-#define IFNAMSIZ     256
-#define TAP_PATH     "/tmp"
-#define TAP_NAME     "phy"
+//#define IFNAMSIZ     256
+#define TAP_PATH     "/dev/net"
+#define TAP_NAME     "tap"
 
 #define MAXNUMDEV    8
 #define N    2
@@ -33,6 +38,7 @@ struct rx {
 	unsigned int rdy;
 	unsigned int len;
 	unsigned int pos;
+	unsigned int gap;
 	unsigned char buf[2048];
 };
 
@@ -58,7 +64,6 @@ struct sim {
 
 	int do_sim;
 
-	int gap_budget;
 
 	int txpackets;
 	int rxpackets;
@@ -77,6 +82,7 @@ void set_signal(int sig) {
 	}
 }
 
+#if 0
 int tap_open(struct phy *phy)
 {
 	phy->fd = open(phy->dev, O_RDWR);
@@ -86,6 +92,35 @@ int tap_open(struct phy *phy)
 	}
 
 err:
+	return phy->fd;
+}
+#endif
+
+int tap_open(struct phy *phy)
+{
+	struct ifreq ifr;
+	int err;
+
+	phy->fd = open("/dev/net/tun", O_RDWR);
+	if (phy->fd < 0) {
+		perror("open");
+		return -1;
+	}
+
+	memset(&ifr, 0, sizeof(ifr));
+	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+	printf("dev: %s\n", phy->dev);
+	if (phy->dev) {
+		strncpy(ifr.ifr_name, phy->dev, IFNAMSIZ);
+	}
+
+	err = ioctl(phy->fd, TUNSETIFF, (void *)&ifr);
+	if (err < 0) {
+		perror("TUNSETIFF");
+		close(phy->fd);
+		return err;
+	}
+
 	return phy->fd;
 }
 
@@ -135,41 +170,95 @@ static inline int eth_send(struct phy *phy)
 	return write(phy->fd, phy->tx.buf, phy->tx.pos);
 }
 
+static inline unsigned int tkeep_bit(uint8_t n)
+{
+	switch (n) {
+		case 1: return 0x80;
+		case 2: return 0xc0;
+		case 3: return 0xe0;
+		case 4: return 0xf0;
+		case 5: return 0xf8;
+		case 6: return 0xfc;
+		case 7: return 0xfe;
+		case 8: return 0xff;
+		default:
+			printf("tkeep_bit: unknown value\n");
+			exit(1);
+	}
+}
+
+static inline void rxsim_zero(struct sim *s, int n)
+{
+	s->top->s_axis_rx_tvalid = 0;
+	s->top->s_axis_rx_tuser = 0;
+	s->top->s_axis_rx_tkeep = 0;
+	s->top->s_axis_rx_tdata = 0;
+	s->top->s_axis_rx_tlast = 0;
+}
+
 static inline void rxsim(struct sim *s, int n)
 {
 	struct rx *rx = &s->phy[n].rx;
+	uint8_t *p = (uint8_t *)&s->top->s_axis_rx_tdata;
+	uint8_t tkeep;
+	int i;
 
-	printf("rxsim: rx->buf=%llu\n", *(uint64_t *)&rx->buf[rx->pos]);
+	//printf("rxsim: n=%d, rx->pos=%d\n", n, rx->pos);
+	//printf("rxsim: rx->pos=%d, rx->buf=%llu\n",
+	//	rx->pos, *(uint64_t *)&rx->buf[rx->pos]);
 
 	s->top->s_axis_rx_tvalid = 1;
-	s->top->s_axis_rx_tkeep = 0xFF;
 	s->top->s_axis_rx_tuser = 0;
 
+	// s_axis_rx_tkeep
+	if ((rx->len - rx->pos) > 8) {
+		tkeep = 8;
+	} else {
+		tkeep = (rx->len - rx->pos) % 8;
+		if (tkeep == 0) {
+			tkeep = 8;
+		}
+	}
+	s->top->s_axis_rx_tkeep = tkeep_bit(tkeep);
+
 	// s_axis_rx_tdata
-	*(uint64_t *)s->top->s_axis_rx_tdata = *(uint64_t *)&rx->buf[rx->pos];
+	for (i = 0; i < tkeep; i++) {
+		*(p+7-i) = *(uint8_t *)&rx->buf[rx->pos++];
+	}
+
+	printf("rxsim: n=%d, rdy=%d, rx->pos=%d, rx->len=%d, tkeep=%d, tkeep=%02X\n",
+		n, rx->rdy, rx->pos, rx->len, tkeep, s->top->s_axis_rx_tkeep);
 
 	if (rx->pos == rx->len) {
 		s->top->s_axis_rx_tlast = 1;
-		s->gap_budget = 3;
+		rx->rdy = 0;
+		rx->len = 0;
+		rx->pos = 0;
+		rx->gap = 3;
+		printf("----------------------------\n");
 	} else {
 		s->top->s_axis_rx_tlast = 0;
 	}
 
-	++rx->pos;
 	s->do_sim = 1;
 }
 
 static inline void txsim(struct sim *s, int n)
 {
 	struct tx *tx = &s->phy[n].tx;
+	uint8_t *p = (uint8_t *)&s->top->m_axis_tx_tdata;
+	int i;
 
-	printf("txsim\n");
+	//printf("txsim\n");
 
-	printf("tx_pos=%d\ttdata=%lu\n",
-		tx->pos, s->top->m_axis_tx_tdata);
-	*(uint64_t *)&tx->buf[tx->pos] = *(uint64_t *)s->top->m_axis_tx_tdata;
+	//printf("tx_pos=%d\ttdata=%lu\n",
+	//	tx->pos, s->top->m_axis_tx_tdata);
 
-	++tx->pos;
+	//*(uint64_t *)&tx->buf[tx->pos] = *(uint64_t *)s->top->m_axis_tx_tdata;
+	for (i = 0; i < 8; i++) {
+		*(uint8_t *)&tx->buf[tx->pos++] = *(p+7-i);
+	}
+
 	s->do_sim = 1;
 }
 
@@ -187,12 +276,14 @@ int main(int argc, char** argv)
 	}
 
 	for (i = 0; i < sim.ndev; i++) {
-		sprintf(sim.phy[i].dev, "%s/%s%d", TAP_PATH, TAP_NAME, i);
+		//sprintf(sim.phy[i].dev, "%s/%s%d", TAP_PATH, TAP_NAME, i);
+		sprintf(sim.phy[i].dev, "%s%d", TAP_NAME, i);
 
 		sim.phy[i].tx.pos = 0;
 		sim.phy[i].rx.pos = 0;
 		sim.phy[i].rx.rdy = 0;
 		sim.phy[i].rx.len = 0;
+		sim.phy[i].rx.gap = 3;
 
 		ret = tap_open(&sim.phy[i]);
 		if (ret < 0) {
@@ -223,43 +314,35 @@ int main(int argc, char** argv)
 
 	sim.txpackets = 0;
 	sim.rxpackets = 0;
-	sim.gap_budget = 3;
 
 	set_signal(SIGINT);
 
 	// run
-//	while (--timeout) {
 	while (1) {
 		if (caught_signal)
 			break;
 
-
 		if (sim.rxpackets > 1) {
 			printf("Simulation finished. rxpackets=%d\n", sim.rxpackets);
 			break;
+		} else {
+			//printf("rxpackets=%d\n", sim.rxpackets);
+			;
 		}
 
 
 		sim.do_sim = 0;
 
-		poll(sim.poll_fds, sim.ndev, 20000);
-		printf("stop\n");
+		poll(sim.poll_fds, sim.ndev, -1);
 
 		for (i = 0; i < sim.ndev; i++) {
 
-#if 0
-			printf("main_time=%u\tcold_reset=%d\ttx_tvalid=%d\n",
-				(uint32_t)sim.main_time, sim.top->cold_reset,
-				sim.top->m_axis_tx_tvalid);
-#endif
-
 			// RX simulation
-			if (sim.gap_budget > 0) {
-				printf("gap\n");
-
+			if (sim.phy[i].rx.gap > 0) {
 				// insert a gap when receiving a packet
 				if ((sim.main_time % SFP_CLK) == 0) {
-					--sim.gap_budget;
+					--sim.phy[i].rx.gap;
+					//printf("gap: i=%d n=%u\n", i, sim.phy[i].rx.gap);
 				}
 				sim.do_sim = 1;
 				break;
@@ -267,23 +350,19 @@ int main(int argc, char** argv)
 				if (sim.phy[i].rx.rdy) {
 					rxsim(&sim, i);
 				} else {
-					sim.phy[i].rx.rdy = 0;
+					rxsim_zero(&sim, i);
 
 					// packet received
 					if ((sim.poll_fds[i].revents & POLLIN) == POLLIN) {
-						printf("hoge\n");
-						sim.phy[i].rx.rdy = 1;
-						sim.phy[i].rx.pos = 0;
-
-						printf("rx.dry: i=%d\n", i);
-
 						ret = eth_recv(&sim.phy[i]);
 						if (ret < 0) {
 							perror("eth_recv");
 							break;
 						}
+						printf("Received Packet: i=%d, count=%d\n", i, ret);
 
 						sim.phy[i].rx.len = ret;
+						sim.phy[i].rx.rdy = 1;
 					}
 				}
 			}
@@ -294,6 +373,7 @@ int main(int argc, char** argv)
 
 				// packet send
 				if (sim.top->m_axis_tx_tlast) {
+					//printf("tx_tlast\n");
 					ret = eth_send(&sim.phy[i]);
 					if (ret < 0) {
 						perror("eth_write");
@@ -310,6 +390,8 @@ int main(int argc, char** argv)
 			tick(&sim);
 		}
 	}
+
+	printf("finish\n");
 
 	sim.tfp->close();
 	sim.top->final();

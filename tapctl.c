@@ -23,8 +23,8 @@
 
 #define MAXNUMDEV    8
 
-#define TAP_PATH     "/tmp"
-#define TAP_NAME     "phy"
+#define TAP_PATH     "/dev/net"
+#define TAP_NAME     "tap"
 #define TAP_MAJOR    10
 #define TAP_MINOR    200
 
@@ -41,6 +41,7 @@ struct tap {
 
 	gid_t gid;
 };
+
 
 int tap_mkchardev(struct tap *tap)
 {
@@ -78,7 +79,8 @@ int tap_init(struct tap *tap)
 
 	sprintf(devpath, "%s/%s", tap->path, tap->dev);
 
-	fd = open(devpath, O_RDWR);
+	//fd = open(devpath, O_RDWR);
+	fd = open("/dev/net/tun", O_RDWR);
 	if (fd < 0) {
 		perror("open");
 		return -1;
