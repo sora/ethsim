@@ -169,7 +169,7 @@ static inline int eth_recv(struct phy *phy)
 	return (phy->rx.len = read(phy->fd, phy->rx.buf, sizeof(phy->rx.buf)));
 }
 
-static inline int eth_send(struct phy *phy)
+static inline int eth_xmit(struct phy *phy)
 {
 	return write(phy->fd, phy->tx.buf, phy->tx.pos);
 }
@@ -265,12 +265,29 @@ static inline void pkt_recv(struct sim *s, int n)
 			perror("eth_recv");
 			exit(1);
 		}
-		pr_debug("Received Packet: phy%d, count=%d", n, count);
+		pr_debug("Receiving a packet: phy%d, count=%d", n, count);
 
 		s->phy[n].rx.len = count;
 		s->phy[n].rx.rdy = 1;
 	}
 }
+
+static inline void pkt_send(struct sim *s, int n)
+{
+	int count;
+
+	if (s->top->m_axis_tx_tlast) {
+		count = eth_xmit(&s->phy[n]);
+		if (count < 0) {
+			perror("eth_write");
+			exit(1);
+		}
+		pr_debug("Sending a packet: phy%d, count=%d", n, count);
+
+		s->phy[n].tx.pos = 0;
+	}
+}
+
 
 int main(int argc, char** argv)
 {
@@ -368,14 +385,7 @@ int main(int argc, char** argv)
 				txsim(&sim, i);
 				do_sim = 1;
 
-				// packet send
-				if (sim.top->m_axis_tx_tlast) {
-					ret = eth_send(&sim.phy[i]);
-					if (ret < 0) {
-						perror("eth_write");
-						break;
-					}
-				}
+				pkt_send(&sim, i);
 			} else {
 				sim.phy[i].tx.pos = 0;
 			}
