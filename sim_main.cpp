@@ -69,9 +69,6 @@ struct sim {
 
 	struct pollfd poll_fds[MAXNUMDEV];
 
-	int do_sim;
-
-
 	int txpackets;
 	int rxpackets;
 };
@@ -242,8 +239,6 @@ static inline void rxsim(struct sim *s, int n)
 	} else {
 		s->top->s_axis_rx_tlast = 0;
 	}
-
-	s->do_sim = 1;
 }
 
 static inline void txsim(struct sim *s, int n)
@@ -258,8 +253,6 @@ static inline void txsim(struct sim *s, int n)
 	for (i = 0; i < 8; i++) {
 		*(uint8_t *)&tx->buf[tx->pos++] = *(p+7-i);
 	}
-
-	s->do_sim = 1;
 }
 
 static inline void pkt_recv(struct sim *s, int n)
@@ -282,7 +275,7 @@ static inline void pkt_recv(struct sim *s, int n)
 int main(int argc, char** argv)
 {
 	struct sim sim;
-	int i, ret; //, timeout = 2000;
+	int i, ret, do_sim; //, timeout = 2000;
 
 	sim.ndev = N;  // todo
 
@@ -347,7 +340,7 @@ int main(int argc, char** argv)
 		}
 
 
-		sim.do_sim = 0;
+		do_sim = 0;
 
 		poll(sim.poll_fds, sim.ndev, -1);
 
@@ -359,10 +352,11 @@ int main(int argc, char** argv)
 				if ((sim.main_time % SFP_CLK) == 0) {
 					--sim.phy[i].rx.gap;
 				}
-				sim.do_sim = 1;
+				do_sim = 1;
 			} else {
 				if (sim.phy[i].rx.rdy) {
 					rxsim(&sim, i);
+					do_sim = 1;
 				} else {
 					rxsim_idle(&sim, i);
 					pkt_recv(&sim, i);
@@ -372,6 +366,7 @@ int main(int argc, char** argv)
 			// TX simulation
 			if (sim.top->m_axis_tx_tvalid) {
 				txsim(&sim, i);
+				do_sim = 1;
 
 				// packet send
 				if (sim.top->m_axis_tx_tlast) {
@@ -386,7 +381,7 @@ int main(int argc, char** argv)
 			}
 		}
 
-		if (sim.do_sim) {
+		if (do_sim) {
 			clock(&sim);
 			tick(&sim);
 		}
