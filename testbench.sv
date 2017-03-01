@@ -8,21 +8,62 @@ module testbench #(
 )(
 	input wire clk156,
 	input wire cold_reset, 
-	/* AXIS RX */
-	output wire        s_axis_rx_tready,
-	input  wire        s_axis_rx_tvalid,
-	input  wire [63:0] s_axis_rx_tdata,
-	input  wire [ 7:0] s_axis_rx_tkeep,
-	input  wire        s_axis_rx_tlast,
-	input  wire        s_axis_rx_tuser,
-	
-	/* AXIS TX */
-	input  wire        m_axis_tx_tready,
-	output wire        m_axis_tx_tvalid,
-	output wire [63:0] m_axis_tx_tdata,
-	output wire [ 7:0] m_axis_tx_tkeep,
-	output wire        m_axis_tx_tlast,
-	output wire        m_axis_tx_tuser
+
+	/* PHY0 */
+	input  wire        phy0_tx_tready,
+	output wire        phy0_tx_tvalid,
+	output wire [63:0] phy0_tx_tdata,
+	output wire [ 7:0] phy0_tx_tkeep,
+	output wire        phy0_tx_tlast,
+	output wire        phy0_tx_tuser,
+	output wire        phy0_rx_tready,
+	input  wire        phy0_rx_tvalid,
+	input  wire [63:0] phy0_rx_tdata,
+	input  wire [ 7:0] phy0_rx_tkeep,
+	input  wire        phy0_rx_tlast,
+	input  wire        phy0_rx_tuser,
+
+	/* PHY1 */
+	input  wire        phy1_tx_tready,
+	output wire        phy1_tx_tvalid,
+	output wire [63:0] phy1_tx_tdata,
+	output wire [ 7:0] phy1_tx_tkeep,
+	output wire        phy1_tx_tlast,
+	output wire        phy1_tx_tuser,
+	output wire        phy1_rx_tready,
+	input  wire        phy1_rx_tvalid,
+	input  wire [63:0] phy1_rx_tdata,
+	input  wire [ 7:0] phy1_rx_tkeep,
+	input  wire        phy1_rx_tlast,
+	input  wire        phy1_rx_tuser,
+
+	/* PHY2 */
+	input  wire        phy2_tx_tready,
+	output wire        phy2_tx_tvalid,
+	output wire [63:0] phy2_tx_tdata,
+	output wire [ 7:0] phy2_tx_tkeep,
+	output wire        phy2_tx_tlast,
+	output wire        phy2_tx_tuser,
+	output wire        phy2_rx_tready,
+	input  wire        phy2_rx_tvalid,
+	input  wire [63:0] phy2_rx_tdata,
+	input  wire [ 7:0] phy2_rx_tkeep,
+	input  wire        phy2_rx_tlast,
+	input  wire        phy2_rx_tuser,
+
+	/* PHY3 */
+	input  wire        phy3_tx_tready,
+	output wire        phy3_tx_tvalid,
+	output wire [63:0] phy3_tx_tdata,
+	output wire [ 7:0] phy3_tx_tkeep,
+	output wire        phy3_tx_tlast,
+	output wire        phy3_tx_tuser,
+	output wire        phy3_rx_tready,
+	input  wire        phy3_rx_tvalid,
+	input  wire [63:0] phy3_rx_tdata,
+	input  wire [ 7:0] phy3_rx_tkeep,
+	input  wire        phy3_rx_tlast,
+	input  wire        phy3_rx_tuser
 );
 
 dut dut0 (
