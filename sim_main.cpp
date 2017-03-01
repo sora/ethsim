@@ -39,7 +39,7 @@ static int caught_signal = 0;
 struct eth10g_axis {
 	uint8_t *tvalid;
 	uint8_t *tkeep;
-	uint8_t *tdata;
+	uint64_t *tdata;
 	uint8_t *tlast;
 	uint8_t *tuser;
 	uint8_t *tready;
@@ -155,60 +155,60 @@ void phy_setup(struct sim *s)
 void axis_setup(struct sim *s)
 {
 	// phy0
-	s->phy[0].tx.axis.tvalid = (uint8_t *)&s->top->phy0_tx_tvalid;
-	s->phy[0].tx.axis.tkeep  = (uint8_t *)&s->top->phy0_tx_tkeep;
-	s->phy[0].tx.axis.tdata  = (uint8_t *)&s->top->phy0_tx_tdata;
-	s->phy[0].tx.axis.tlast  = (uint8_t *)&s->top->phy0_tx_tlast;
-	s->phy[0].tx.axis.tuser  = (uint8_t *)&s->top->phy0_tx_tuser;
-	s->phy[0].tx.axis.tready = (uint8_t *)&s->top->phy0_tx_tready;
-	s->phy[0].rx.axis.tvalid = (uint8_t *)&s->top->phy0_rx_tvalid;
-	s->phy[0].rx.axis.tkeep  = (uint8_t *)&s->top->phy0_rx_tkeep;
-	s->phy[0].rx.axis.tdata  = (uint8_t *)&s->top->phy0_rx_tdata;
-	s->phy[0].rx.axis.tlast  = (uint8_t *)&s->top->phy0_rx_tlast;
-	s->phy[0].rx.axis.tuser  = (uint8_t *)&s->top->phy0_rx_tuser;
-	s->phy[0].rx.axis.tready = (uint8_t *)&s->top->phy0_rx_tready;
+	s->phy[0].tx.axis.tvalid = &s->top->phy0_tx_tvalid;
+	s->phy[0].tx.axis.tkeep  = &s->top->phy0_tx_tkeep;
+	s->phy[0].tx.axis.tdata  = &s->top->phy0_tx_tdata;
+	s->phy[0].tx.axis.tlast  = &s->top->phy0_tx_tlast;
+	s->phy[0].tx.axis.tuser  = &s->top->phy0_tx_tuser;
+	s->phy[0].tx.axis.tready = &s->top->phy0_tx_tready;
+	s->phy[0].rx.axis.tvalid = &s->top->phy0_rx_tvalid;
+	s->phy[0].rx.axis.tkeep  = &s->top->phy0_rx_tkeep;
+	s->phy[0].rx.axis.tdata  = &s->top->phy0_rx_tdata;
+	s->phy[0].rx.axis.tlast  = &s->top->phy0_rx_tlast;
+	s->phy[0].rx.axis.tuser  = &s->top->phy0_rx_tuser;
+	s->phy[0].rx.axis.tready = &s->top->phy0_rx_tready;
 
 	// phy1
-	s->phy[1].tx.axis.tvalid = (uint8_t *)&s->top->phy1_tx_tvalid;
-	s->phy[1].tx.axis.tkeep  = (uint8_t *)&s->top->phy1_tx_tkeep;
-	s->phy[1].tx.axis.tdata  = (uint8_t *)&s->top->phy1_tx_tdata;
-	s->phy[1].tx.axis.tlast  = (uint8_t *)&s->top->phy1_tx_tlast;
-	s->phy[1].tx.axis.tuser  = (uint8_t *)&s->top->phy1_tx_tuser;
-	s->phy[1].tx.axis.tready = (uint8_t *)&s->top->phy1_tx_tready;
-	s->phy[1].rx.axis.tvalid = (uint8_t *)&s->top->phy1_rx_tvalid;
-	s->phy[1].rx.axis.tkeep  = (uint8_t *)&s->top->phy1_rx_tkeep;
-	s->phy[1].rx.axis.tdata  = (uint8_t *)&s->top->phy1_rx_tdata;
-	s->phy[1].rx.axis.tlast  = (uint8_t *)&s->top->phy1_rx_tlast;
-	s->phy[1].rx.axis.tuser  = (uint8_t *)&s->top->phy1_rx_tuser;
-	s->phy[1].rx.axis.tready = (uint8_t *)&s->top->phy1_rx_tready;
+	s->phy[1].tx.axis.tvalid = &s->top->phy1_tx_tvalid;
+	s->phy[1].tx.axis.tkeep  = &s->top->phy1_tx_tkeep;
+	s->phy[1].tx.axis.tdata  = &s->top->phy1_tx_tdata;
+	s->phy[1].tx.axis.tlast  = &s->top->phy1_tx_tlast;
+	s->phy[1].tx.axis.tuser  = &s->top->phy1_tx_tuser;
+	s->phy[1].tx.axis.tready = &s->top->phy1_tx_tready;
+	s->phy[1].rx.axis.tvalid = &s->top->phy1_rx_tvalid;
+	s->phy[1].rx.axis.tkeep  = &s->top->phy1_rx_tkeep;
+	s->phy[1].rx.axis.tdata  = &s->top->phy1_rx_tdata;
+	s->phy[1].rx.axis.tlast  = &s->top->phy1_rx_tlast;
+	s->phy[1].rx.axis.tuser  = &s->top->phy1_rx_tuser;
+	s->phy[1].rx.axis.tready = &s->top->phy1_rx_tready;
 
 	// phy2
-	s->phy[2].tx.axis.tvalid = (uint8_t *)&s->top->phy2_tx_tvalid;
-	s->phy[2].tx.axis.tkeep  = (uint8_t *)&s->top->phy2_tx_tkeep;
-	s->phy[2].tx.axis.tdata  = (uint8_t *)&s->top->phy2_tx_tdata;
-	s->phy[2].tx.axis.tlast  = (uint8_t *)&s->top->phy2_tx_tlast;
-	s->phy[2].tx.axis.tuser  = (uint8_t *)&s->top->phy2_tx_tuser;
-	s->phy[2].tx.axis.tready = (uint8_t *)&s->top->phy2_tx_tready;
-	s->phy[2].rx.axis.tvalid = (uint8_t *)&s->top->phy2_rx_tvalid;
-	s->phy[2].rx.axis.tkeep  = (uint8_t *)&s->top->phy2_rx_tkeep;
-	s->phy[2].rx.axis.tdata  = (uint8_t *)&s->top->phy2_rx_tdata;
-	s->phy[2].rx.axis.tlast  = (uint8_t *)&s->top->phy2_rx_tlast;
-	s->phy[2].rx.axis.tuser  = (uint8_t *)&s->top->phy2_rx_tuser;
-	s->phy[2].rx.axis.tready = (uint8_t *)&s->top->phy2_rx_tready;
+	s->phy[2].tx.axis.tvalid = &s->top->phy2_tx_tvalid;
+	s->phy[2].tx.axis.tkeep  = &s->top->phy2_tx_tkeep;
+	s->phy[2].tx.axis.tdata  = &s->top->phy2_tx_tdata;
+	s->phy[2].tx.axis.tlast  = &s->top->phy2_tx_tlast;
+	s->phy[2].tx.axis.tuser  = &s->top->phy2_tx_tuser;
+	s->phy[2].tx.axis.tready = &s->top->phy2_tx_tready;
+	s->phy[2].rx.axis.tvalid = &s->top->phy2_rx_tvalid;
+	s->phy[2].rx.axis.tkeep  = &s->top->phy2_rx_tkeep;
+	s->phy[2].rx.axis.tdata  = &s->top->phy2_rx_tdata;
+	s->phy[2].rx.axis.tlast  = &s->top->phy2_rx_tlast;
+	s->phy[2].rx.axis.tuser  = &s->top->phy2_rx_tuser;
+	s->phy[2].rx.axis.tready = &s->top->phy2_rx_tready;
 
 	// phy3
-	s->phy[3].tx.axis.tvalid = (uint8_t *)&s->top->phy3_tx_tvalid;
-	s->phy[3].tx.axis.tkeep  = (uint8_t *)&s->top->phy3_tx_tkeep;
-	s->phy[3].tx.axis.tdata  = (uint8_t *)&s->top->phy3_tx_tdata;
-	s->phy[3].tx.axis.tlast  = (uint8_t *)&s->top->phy3_tx_tlast;
-	s->phy[3].tx.axis.tuser  = (uint8_t *)&s->top->phy3_tx_tuser;
-	s->phy[3].tx.axis.tready = (uint8_t *)&s->top->phy3_tx_tready;
-	s->phy[3].rx.axis.tvalid = (uint8_t *)&s->top->phy3_rx_tvalid;
-	s->phy[3].rx.axis.tkeep  = (uint8_t *)&s->top->phy3_rx_tkeep;
-	s->phy[3].rx.axis.tdata  = (uint8_t *)&s->top->phy3_rx_tdata;
-	s->phy[3].rx.axis.tlast  = (uint8_t *)&s->top->phy3_rx_tlast;
-	s->phy[3].rx.axis.tuser  = (uint8_t *)&s->top->phy3_rx_tuser;
-	s->phy[3].rx.axis.tready = (uint8_t *)&s->top->phy3_rx_tready;
+	s->phy[3].tx.axis.tvalid = &s->top->phy3_tx_tvalid;
+	s->phy[3].tx.axis.tkeep  = &s->top->phy3_tx_tkeep;
+	s->phy[3].tx.axis.tdata  = &s->top->phy3_tx_tdata;
+	s->phy[3].tx.axis.tlast  = &s->top->phy3_tx_tlast;
+	s->phy[3].tx.axis.tuser  = &s->top->phy3_tx_tuser;
+	s->phy[3].tx.axis.tready = &s->top->phy3_tx_tready;
+	s->phy[3].rx.axis.tvalid = &s->top->phy3_rx_tvalid;
+	s->phy[3].rx.axis.tkeep  = &s->top->phy3_rx_tkeep;
+	s->phy[3].rx.axis.tdata  = &s->top->phy3_rx_tdata;
+	s->phy[3].rx.axis.tlast  = &s->top->phy3_rx_tlast;
+	s->phy[3].rx.axis.tuser  = &s->top->phy3_rx_tuser;
+	s->phy[3].rx.axis.tready = &s->top->phy3_rx_tready;
 }
 
 void poll_setup(struct sim *s)
@@ -269,17 +269,20 @@ static inline unsigned int tkeep_bit(uint8_t n)
 	}
 }
 
-static inline void rxsim_idle(struct rx *rx)
+static inline void axis_zero(struct phy *phy)
 {
-	*rx->axis.tvalid = 0;
-	*rx->axis.tkeep  = 0;
-	*rx->axis.tdata  = 0;
-	*rx->axis.tuser  = 0;
+	*phy->tx.axis.tready  = 0;
+
+	*phy->rx.axis.tvalid = 0;
+	*phy->rx.axis.tkeep  = 0;
+	*phy->rx.axis.tdata  = 0;
+	*phy->rx.axis.tuser  = 0;
+	*phy->rx.axis.tlast  = 0;
 }
 
 static inline void rxsim(struct rx *rx)
 {
-	uint8_t *p = rx->axis.tdata;
+	uint8_t *p = (uint8_t *)rx->axis.tdata;
 	uint8_t tkeep;
 	int i;
 
@@ -343,11 +346,11 @@ static inline int eth_xmit(struct phy *phy)
 
 static inline void txsim(struct tx *tx)
 {
-	uint8_t *p = tx->axis.tdata;
+	uint8_t *p = (uint8_t *)tx->axis.tdata;
 	int i;
 
-	pr_info("txsim: tx->pos=%d, tkeep=%02X, tlast=%02X",
-			tx->pos, *tx->axis.tkeep, *tx->axis.tlast);
+	pr_debug("txsim: tx->pos=%d, tkeep=%02X, tlast=%02X",
+		tx->pos, *tx->axis.tkeep, *tx->axis.tlast);
 
 	for (i = 0; i < 8; i++) {
 		*(uint8_t *)&tx->buf[tx->pos++] = *(p+7-i);
@@ -385,10 +388,6 @@ int main(int argc, char** argv)
 	}
 
 
-	phy_setup(&sim);
-	axis_setup(&sim);
-	poll_setup(&sim);
-
 	Verilated::commandArgs(argc, argv);
 	Verilated::traceEverOn(true);
 
@@ -400,6 +399,9 @@ int main(int argc, char** argv)
 	sim.tfp->spTrace()->set_time_resolution(SIM_TIME_RESOLUTION);
 	sim.tfp->open(WAVE_FILE_NAME);
 
+	phy_setup(&sim);
+	axis_setup(&sim);
+	poll_setup(&sim);
 
 	// init
 	sim.top->clk156 = 0;
@@ -433,6 +435,8 @@ int main(int argc, char** argv)
 		for (i = 0; i < sim.ndev; i++) {
 			phy = &sim.phy[i];
 
+			axis_zero(phy);
+
 			// RX simulation
 			if (phy->rx.gap > 0) {
 				// insert a gap when receiving a packet
@@ -445,12 +449,11 @@ int main(int argc, char** argv)
 					rxsim(&phy->rx);
 					do_sim = 1;
 				} else {
-					rxsim_idle(&phy->rx);
 					pkt_recv(&sim, phy);
 				}
 			}
 
-			pr_info("log: t=%u, n=%d, tx->pos=%d, tkeep=%02X, tlast=%02X",
+			pr_debug("log: t=%u, n=%d, tx->pos=%d, tkeep=%02X, tlast=%02X",
 				(unsigned int)sim.main_time, i, phy->tx.pos, *phy->tx.axis.tkeep, *phy->tx.axis.tlast);
 
 			// TX simulation
