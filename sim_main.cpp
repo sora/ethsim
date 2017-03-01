@@ -373,6 +373,7 @@ static inline void pkt_send(struct phy *phy)
 int main(int argc, char** argv)
 {
 	struct sim sim;
+	struct phy *phy;
 	int i, ret, do_sim; //, timeout = 2000;
 
 	sim.ndev = N;  // todo
@@ -430,36 +431,36 @@ int main(int argc, char** argv)
 		poll(sim.poll_fds, sim.ndev, 0);
 
 		for (i = 0; i < sim.ndev; i++) {
+			phy = &sim.phy[i];
 
 			// RX simulation
-			if (sim.phy[i].rx.gap > 0) {
+			if (phy->rx.gap > 0) {
 				// insert a gap when receiving a packet
 				if ((sim.main_time % SFP_CLK) == 0) {
-					--sim.phy[i].rx.gap;
+					--phy->rx.gap;
 				}
 				do_sim = 1;
 			} else {
-				if (sim.phy[i].rx.rdy) {
-					rxsim(&sim.phy[i].rx);
+				if (phy->rx.rdy) {
+					rxsim(&phy->rx);
 					do_sim = 1;
 				} else {
-					rxsim_idle(&sim.phy[i].rx);
-					pkt_recv(&sim, &sim.phy[i]);
+					rxsim_idle(&phy->rx);
+					pkt_recv(&sim, phy);
 				}
 			}
 
 			pr_info("log: t=%u, n=%d, tx->pos=%d, tkeep=%02X, tlast=%02X",
-				(unsigned int)sim.main_time, i, sim.phy[i].tx.pos,
-				*sim.phy[i].tx.axis.tkeep, *sim.phy[i].tx.axis.tlast);
+				(unsigned int)sim.main_time, i, phy->tx.pos, *phy->tx.axis.tkeep, *phy->tx.axis.tlast);
 
 			// TX simulation
-			if (*sim.phy[i].tx.axis.tvalid) {
-				txsim(&sim.phy[i].tx);
+			if (*phy->tx.axis.tvalid) {
+				txsim(&phy->tx);
 				do_sim = 1;
 
-				pkt_send(&sim.phy[i]);
+				pkt_send(phy);
 			} else {
-				sim.phy[i].tx.pos = 0;
+				phy->tx.pos = 0;
 			}
 		}
 
