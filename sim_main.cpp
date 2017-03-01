@@ -30,10 +30,10 @@
 #define pr_warn(S, ...)   if(warn) fprintf(stderr, "\x1b[1m\x1b[33mwarn :\x1b[0m " S "\n", ##__VA_ARGS__)
 #define pr_debug(S, ...)  if (debug) fprintf(stderr, "\x1b[1m\x1b[90mdebug:\x1b[0m " S "\n", ##__VA_ARGS__)
 
-#define N            2
+#define N            4
 #define MAXNUMDEV    4
 
-static int debug = 0;
+static int debug = 1;
 static int caught_signal = 0;
 
 struct eth10g_axis {
@@ -81,10 +81,13 @@ struct sim {
 
 	struct pollfd poll_fds[MAXNUMDEV];  // same value of phy.fd
 
+};
+
+struct _stat {
 	int txpackets;
 	int rxpackets;
 };
-
+struct _stat pkt_stat;  // todo
 
 void sig_handler(int sig) {
 	if (sig == SIGINT)
@@ -315,6 +318,7 @@ static inline void rxsim(struct rx *rx)
 		rx->pos = 0;
 		rx->gap = 3;
 		pr_debug("-------------------------");
+		++pkt_stat.rxpackets;
 	} else {
 		*rx->axis.tlast = 0;
 	}
@@ -389,12 +393,13 @@ int main(int argc, char** argv)
 
 
 	Verilated::commandArgs(argc, argv);
-	Verilated::traceEverOn(true);
 
 	sim.main_time = 0;
-	sim.top = new Vtestbench;
-	sim.tfp = new VerilatedVcdC;
 
+	sim.top = new Vtestbench;
+	Verilated::traceEverOn(true);
+
+	sim.tfp = new VerilatedVcdC;
 	sim.top->trace(sim.tfp, 99);
 	sim.tfp->spTrace()->set_time_resolution(SIM_TIME_RESOLUTION);
 	sim.tfp->open(WAVE_FILE_NAME);
@@ -409,8 +414,8 @@ int main(int argc, char** argv)
 
 	cold_reset(&sim);
 
-	sim.txpackets = 0;
-	sim.rxpackets = 0;
+	pkt_stat.txpackets = 0;
+	pkt_stat.rxpackets = 0;
 
 	set_signal(SIGINT);
 
@@ -419,8 +424,8 @@ int main(int argc, char** argv)
 		if (caught_signal)
 			break;
 
-		if (sim.rxpackets > 1) {
-			printf("Simulation finished. rxpackets=%d\n", sim.rxpackets);
+		if (pkt_stat.rxpackets > 1000) {
+			printf("Simulation finished. rxpackets=%d\n", pkt_stat.rxpackets);
 			break;
 		} else {
 			//printf("rxpackets=%d\n", sim.rxpackets);
@@ -452,9 +457,6 @@ int main(int argc, char** argv)
 					pkt_recv(&sim, phy);
 				}
 			}
-
-			pr_debug("log: t=%u, n=%d, tx->pos=%d, tkeep=%02X, tlast=%02X",
-				(unsigned int)sim.main_time, i, phy->tx.pos, *phy->tx.axis.tkeep, *phy->tx.axis.tlast);
 
 			// TX simulation
 			if (*phy->tx.axis.tvalid) {
